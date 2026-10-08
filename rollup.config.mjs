@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import resolve from '@rollup/plugin-node-resolve'
 import commonjs from '@rollup/plugin-commonjs'
 import typescript from '@rollup/plugin-typescript'
+import json from '@rollup/plugin-json'
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf8'))
 
@@ -17,6 +18,7 @@ export default {
     include: 'src/**',
   },
   plugins: [
+    json({ compact: true, preferConst: true }),
     typescript({ tsconfig: './tsconfig.build.json' }),
     commonjs(),
     resolve(),

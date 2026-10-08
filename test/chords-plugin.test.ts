@@ -4,23 +4,31 @@ import { chordFromName, chordsPlugin } from '../src/chords-plugin'
 describe('chordsPlugin', () => {
   const SVGuitarWithChords = SVGuitarChord.plugin(chordsPlugin)
 
-  test('adds a chainable chordName method', () => {
+  test('sets a guitar chord from its name', () => {
     const chart = new SVGuitarWithChords()
+    const chord = jest.spyOn(chart, 'chord')
+    const configure = jest.spyOn(chart, 'configure')
 
-    expect(chart.chordName('C#')).toBe(chart)
+    expect(chart.guitarChord('C#m', 1)).toBe(chart)
+    expect(chord).toHaveBeenCalledWith(chordFromName('C#m', 1))
+    expect(configure).toHaveBeenCalledWith({ strings: 6 })
   })
 
-  test('draws the chord', () => {
+  test('sets a ukulele chord from its name', () => {
+    const chart = new SVGuitarWithChords()
+    const chord = jest.spyOn(chart, 'chord')
+    const configure = jest.spyOn(chart, 'configure')
+
+    expect(chart.ukuleleChord('C#m', 1)).toBe(chart)
+    expect(chord).toHaveBeenCalledWith(chordFromName('C#m', 1, 'ukulele'))
+    expect(configure).toHaveBeenCalledWith({ strings: 4 })
+  })
+
+  test.each(['guitarChord', 'ukuleleChord'] as const)('%s draws the chord', (method) => {
     const chart = new SVGuitarWithChords()
 
-    chart.chordName('C#').draw()
+    chart[method]('F').draw()
 
     expect(chart.toSvg()).toContain('<svg')
-  })
-})
-
-describe('chordFromName', () => {
-  test('returns an empty chord (placeholder)', () => {
-    expect(chordFromName('C#')).toEqual({ fingers: [], barres: [] })
   })
 })
