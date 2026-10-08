@@ -32,10 +32,14 @@ Unknown chords and voicings throw an error.
 The chord data can also be used without drawing:
 
 ```ts
-import { chordFromName, chordVoicings } from '@svguitar/chords-plugin'
+import { chordFromName, chordVoicings, getGuitarChord, getUkuleleChord } from '@svguitar/chords-plugin'
 
+getGuitarChord('Am7') // SVGuitar chord: { fingers, barres, position?, title }
+getUkuleleChord('Am7', 1) // second voicing
 chordVoicings('Am7') // number of guitar voicings
-chordFromName('Am7', 0) // SVGuitar chord: { fingers, barres, position?, title }
+chordVoicings('Am7', 'ukulele')
+
+// or with the instrument as a parameter
 chordFromName('Am7', 0, 'ukulele')
 ```
 

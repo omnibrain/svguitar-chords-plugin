@@ -1,7 +1,13 @@
 import type { SVGuitarChord } from '@svguitar/core'
-import { chordFromName, chordVoicings, type Instrument } from './chord-name'
+import {
+  chordFromName,
+  chordVoicings,
+  getGuitarChord,
+  getUkuleleChord,
+  type Instrument,
+} from './chord-name'
 
-export { chordFromName, chordVoicings, type Instrument }
+export { chordFromName, chordVoicings, getGuitarChord, getUkuleleChord, type Instrument }
 
 export interface ChordsPluginApi {
   /**
@@ -33,10 +39,10 @@ export interface ChordsPluginApi {
 export function chordsPlugin(instance: SVGuitarChord): ChordsPluginApi {
   return {
     guitarChord(name: string, voicing?: number) {
-      return instance.configure({ strings: 6 }).chord(chordFromName(name, voicing, 'guitar'))
+      return instance.configure({ strings: 6 }).chord(getGuitarChord(name, voicing))
     },
     ukuleleChord(name: string, voicing?: number) {
-      return instance.configure({ strings: 4 }).chord(chordFromName(name, voicing, 'ukulele'))
+      return instance.configure({ strings: 4 }).chord(getUkuleleChord(name, voicing))
     },
   }
 }

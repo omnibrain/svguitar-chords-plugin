@@ -1,5 +1,7 @@
 import { SVGuitarChord } from '@svguitar/core'
+import * as entry from '../src/chords-plugin'
 import { chordFromName, chordsPlugin } from '../src/chords-plugin'
+import * as chordName from '../src/chord-name'
 
 describe('chordsPlugin', () => {
   const SVGuitarWithChords = SVGuitarChord.plugin(chordsPlugin)
@@ -30,5 +32,15 @@ describe('chordsPlugin', () => {
     chart[method]('F').draw()
 
     expect(chart.toSvg()).toContain('<svg')
+  })
+})
+
+test('exports the chord functions', () => {
+  expect(entry).toMatchObject({
+    chordFromName: chordName.chordFromName,
+    chordVoicings: chordName.chordVoicings,
+    getGuitarChord: chordName.getGuitarChord,
+    getUkuleleChord: chordName.getUkuleleChord,
+    default: chordsPlugin,
   })
 })
