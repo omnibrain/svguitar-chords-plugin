@@ -141,3 +141,18 @@ export function chordFromName(name: string, voicing = 0, instrument: Instrument 
 export function chordVoicings(name: string, instrument: Instrument = 'guitar'): number {
   return findVoicings(name, instrument).length
 }
+
+/**
+ * Returns the guitar chord diagram for a chord name, see {@link chordFromName}.
+ */
+export function getGuitarChord(name: string, voicing = 0): Chord {
+  return chordFromName(name, voicing, 'guitar')
+}
+
+/**
+ * Returns the ukulele chord diagram (standard GCEA tuning) for a chord name, see
+ * {@link chordFromName}.
+ */
+export function getUkuleleChord(name: string, voicing = 0): Chord {
+  return chordFromName(name, voicing, 'ukulele')
+}

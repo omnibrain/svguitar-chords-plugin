@@ -1,4 +1,4 @@
-import { chordFromName, chordVoicings } from '../src/chord-name'
+import { chordFromName, chordVoicings, getGuitarChord, getUkuleleChord } from '../src/chord-name'
 import guitar from '../src/data/guitar.json'
 import ukulele from '../src/data/ukulele.json'
 
@@ -166,6 +166,20 @@ describe('chordFromName', () => {
         barres.forEach((barre) => expect(barre.fromString).toBeGreaterThan(barre.toString))
       }
     })
+  })
+})
+
+describe('getGuitarChord', () => {
+  test('returns the guitar chord', () => {
+    expect(getGuitarChord('Am')).toEqual(chordFromName('Am', 0, 'guitar'))
+    expect(getGuitarChord('Am', 2)).toEqual(chordFromName('Am', 2, 'guitar'))
+  })
+})
+
+describe('getUkuleleChord', () => {
+  test('returns the ukulele chord', () => {
+    expect(getUkuleleChord('Am')).toEqual(chordFromName('Am', 0, 'ukulele'))
+    expect(getUkuleleChord('Am', 2)).toEqual(chordFromName('Am', 2, 'ukulele'))
   })
 })
 
