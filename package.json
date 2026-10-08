@@ -12,12 +12,12 @@
     "svguitar-plugin"
   ],
   "main": "dist/chords-plugin.umd.js",
-  "module": "dist/chords-plugin.es.js",
+  "module": "dist/chords-plugin.mjs",
   "types": "dist/types/chords-plugin.d.ts",
   "exports": {
     ".": {
       "types": "./dist/types/chords-plugin.d.ts",
-      "import": "./dist/chords-plugin.es.js",
+      "import": "./dist/chords-plugin.mjs",
       "require": "./dist/chords-plugin.umd.js"
     }
   },
@@ -46,7 +46,8 @@
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "test:watch": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage --watch",
     "test:prod": "run-s lint typecheck test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "generate:chords": "node scripts/generate-chords.mjs"
   },
   "peerDependencies": {
     "@svguitar/core": "^2.9.0"
@@ -101,9 +102,11 @@
     "@commitlint/config-conventional": "^21.2.3",
     "@eslint/js": "^10.0.1",
     "@rollup/plugin-commonjs": "^29.0.3",
+    "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.3.0",
     "@svguitar/core": "^2.9.0",
+    "@tombatossals/chords-db": "^0.5.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.6.4",
     "@types/svgdom": "^0.1.2",
