@@ -1,4 +1,11 @@
-import { chordFromName, chordVoicings, getGuitarChord, getUkuleleChord } from '../src/chord-name'
+import {
+  chordFromName,
+  chordNames,
+  chordVoicings,
+  getGuitarChord,
+  getUkuleleChord,
+  searchChords,
+} from '../src/chord-name'
 import guitar from '../src/data/guitar.json'
 import ukulele from '../src/data/ukulele.json'
 
@@ -180,6 +187,57 @@ describe('getUkuleleChord', () => {
   test('returns the ukulele chord', () => {
     expect(getUkuleleChord('Am')).toEqual(chordFromName('Am', 0, 'ukulele'))
     expect(getUkuleleChord('Am', 2)).toEqual(chordFromName('Am', 2, 'ukulele'))
+  })
+})
+
+describe('chordNames', () => {
+  test.each([
+    ['guitar', 709],
+    ['ukulele', 552],
+  ] as const)('returns every %s chord name, all of which can be looked up', (instrument, count) => {
+    const names = chordNames(instrument)
+
+    expect(names).toHaveLength(count)
+    names.forEach((name) => expect(chordVoicings(name, instrument)).toBeGreaterThan(0))
+  })
+
+  test('lists major, minor, the other chords and then slash chords for each root', () => {
+    const names = chordNames()
+
+    expect(names.slice(0, 5)).toEqual(['C', 'Cm', 'C6', 'C7', 'C9'])
+    expect(names.indexOf('C/E')).toBeGreaterThan(names.indexOf('Cmmaj11'))
+    expect(names.indexOf('C#')).toBeGreaterThan(names.indexOf('C/E'))
+  })
+
+  test('defaults to the guitar', () => {
+    expect(chordNames()).toEqual(chordNames('guitar'))
+  })
+})
+
+describe('searchChords', () => {
+  test('returns the chords that start with the search', () => {
+    expect(searchChords('Am', 'guitar', 6)).toEqual(['Am', 'Am6', 'Am7', 'Am9', 'Am11', 'Am69'])
+    expect(searchChords('Am7')).toEqual(['Am7', 'Am7b5'])
+  })
+
+  test('puts the exact chord first, even if written differently', () => {
+    expect(searchChords('CM7')).toEqual(['Cmaj7'])
+    expect(searchChords('Cmaj', 'guitar', 3)).toEqual(['C', 'Cmaj7', 'Cmaj9'])
+    expect(searchChords('C6/9')).toEqual(['C69'])
+  })
+
+  test('spells the root like the search', () => {
+    expect(searchChords('Db', 'guitar', 2)).toEqual(['Db', 'Dbm'])
+    expect(searchChords('C#', 'ukulele', 2)).toEqual(['C#', 'C#m'])
+    expect(searchChords('c♯m', 'guitar', 1)).toEqual(['C#m'])
+  })
+
+  test('suggests slash chords', () => {
+    expect(searchChords('D/', 'guitar', 3)).toEqual(['D/A', 'D/B', 'D/C'])
+  })
+
+  test.each(['', ' ', 'H', 'xyz', 'Cxyz'])('returns nothing for "%s"', (query) => {
+    expect(searchChords(query)).toEqual([])
   })
 })
 
