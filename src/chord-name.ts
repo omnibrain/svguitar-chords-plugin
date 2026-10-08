@@ -79,14 +79,22 @@ function normalizeQuality(quality: string): string {
   return qualityAliases[quality] ?? qualityAliases[normalized] ?? normalized
 }
 
-function findVoicings(name: string, instrument: Instrument): string[] {
-  const db = databases[instrument]
+function parseName(name: string) {
   const normalized = name.trim().replace(/♯/g, '#').replace(/♭/g, 'b').replace('6/9', '69')
-  const match = /^([A-G][#b]?)([^/]*)(?:\/(.+))?$/.exec(normalized)
+
+  return /^([A-G][#b]?)([^/]*)(?:\/(.+))?$/.exec(normalized)
+}
+
+/**
+ * Finds the database root and suffix of a chord name, e.g. "Db/F" -> "C#", "/F".
+ */
+function findChord(name: string, instrument: Instrument) {
+  const db = databases[instrument]
+  const match = parseName(name)
   const key = match && findEnharmonic(match[1], Object.keys(db))
 
   if (!match || !key) {
-    throw new Error(`Unknown ${instrument} chord "${name}"`)
+    return undefined
   }
 
   const [, , quality, bass] = match
@@ -103,12 +111,83 @@ function findVoicings(name: string, instrument: Instrument): string[] {
     suffix = bassNote ? `${prefix}${bassNote}` : ''
   }
 
-  const voicings = suffixes[suffix]
-  if (!voicings) {
+  return suffix in suffixes ? { key, suffix } : undefined
+}
+
+function findVoicings(name: string, instrument: Instrument): string[] {
+  const chord = findChord(name, instrument)
+  if (!chord) {
     throw new Error(`Unknown ${instrument} chord "${name}"`)
   }
 
-  return voicings.split(' ')
+  return databases[instrument][chord.key][chord.suffix].split(' ')
+}
+
+/**
+ * How a database suffix is written in a chord name, e.g. "minor" -> "m".
+ */
+function displaySuffix(suffix: string): string {
+  return { major: '', minor: 'm', b13b9: '7b9b13', 'b13#9': '7#9b13' }[suffix] ?? suffix
+}
+
+// major and minor first and slash chords last, otherwise the shortest names first
+function compareSuffixes(a: string, b: string): number {
+  const rank = (suffix: string) =>
+    suffix === 'major' ? 0 : suffix === 'minor' ? 1 : suffix.includes('/') ? 3 : 2
+
+  return (
+    rank(a) - rank(b) ||
+    displaySuffix(a).length - displaySuffix(b).length ||
+    displaySuffix(a).localeCompare(displaySuffix(b))
+  )
+}
+
+/**
+ * Returns the names of all chords of an instrument, e.g. "C", "Cm", "C6", ..., "Bm/F#".
+ */
+export function chordNames(instrument: Instrument = 'guitar'): string[] {
+  return Object.entries(databases[instrument]).flatMap(([key, suffixes]) =>
+    Object.keys(suffixes)
+      .sort(compareSuffixes)
+      .map((suffix) => key + displaySuffix(suffix)),
+  )
+}
+
+/**
+ * Returns the names of the chords that match a search, for chord suggestions while typing. A chord
+ * the search names exactly (e.g. "CM7") comes first, followed by the chords that start with the
+ * search (e.g. "Cm" -> "Cm", "Cm6", "Cm7", ..., "Cmaj7"), shortest first. The root is spelled like
+ * in the search and may be lowercase ("db" -> "Db...").
+ *
+ * @param query What the user typed
+ * @param instrument The instrument to search the chords of
+ * @param limit The maximum number of chord names to return
+ */
+export function searchChords(
+  query: string,
+  instrument: Instrument = 'guitar',
+  limit = Infinity,
+): string[] {
+  const search = query
+    .trim()
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .replace(/^[a-g]/, (root) => root.toUpperCase())
+  const root = /^[A-G][#b]?/.exec(search)?.[0]
+  const key = root && findEnharmonic(root, Object.keys(databases[instrument]))
+  if (!root || !key) {
+    return []
+  }
+
+  const typed = search.slice(root.length)
+  const exact = findChord(search, instrument)
+  const suffixes = Object.keys(databases[instrument][key])
+    .filter((suffix) => suffix !== exact?.suffix && displaySuffix(suffix).startsWith(typed))
+    .sort(compareSuffixes)
+
+  return [...(exact ? [exact.suffix] : []), ...suffixes]
+    .slice(0, limit)
+    .map((suffix) => root + displaySuffix(suffix))
 }
 
 /**

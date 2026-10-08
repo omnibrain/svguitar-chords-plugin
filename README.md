@@ -43,6 +43,17 @@ chordVoicings('Am7', 'ukulele')
 chordFromName('Am7', 0, 'ukulele')
 ```
 
+To suggest chords while typing, `searchChords()` returns the chord names that start with a search,
+the exact chord first. `chordNames()` returns all chord names of an instrument.
+
+```ts
+import { searchChords, chordNames } from '@svguitar/chords-plugin'
+
+searchChords('Am', 'guitar', 4) // ['Am', 'Am6', 'Am7', 'Am9']
+searchChords('CM7') // ['Cmaj7']
+chordNames('ukulele') // ['C', 'Cm', 'C6', ...]
+```
+
 ### Chord names
 
 Roots `C` to `B` with `#`/`b` (or `♯`/`♭`), e.g. `C#`, `Db`, `Ebm7`, `F#maj7`, `Bbsus4`, `C6/9`, `D/F#`,

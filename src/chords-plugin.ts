@@ -1,13 +1,23 @@
 import type { SVGuitarChord } from '@svguitar/core'
 import {
   chordFromName,
+  chordNames,
   chordVoicings,
   getGuitarChord,
   getUkuleleChord,
+  searchChords,
   type Instrument,
 } from './chord-name'
 
-export { chordFromName, chordVoicings, getGuitarChord, getUkuleleChord, type Instrument }
+export {
+  chordFromName,
+  chordNames,
+  chordVoicings,
+  getGuitarChord,
+  getUkuleleChord,
+  searchChords,
+  type Instrument,
+}
 
 export interface ChordsPluginApi {
   /**

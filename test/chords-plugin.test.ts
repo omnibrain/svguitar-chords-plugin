@@ -39,6 +39,8 @@ test('exports the chord functions', () => {
   expect(entry).toMatchObject({
     chordFromName: chordName.chordFromName,
     chordVoicings: chordName.chordVoicings,
+    chordNames: chordName.chordNames,
+    searchChords: chordName.searchChords,
     getGuitarChord: chordName.getGuitarChord,
     getUkuleleChord: chordName.getUkuleleChord,
     default: chordsPlugin,
