@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4](https://github.com/omnibrain/svguitar-chords-plugin/compare/chords-plugin-v0.0.3...chords-plugin-v0.0.4) (2026-10-09)
+
+
+### Features
+
+* generate voicings for every chord type, root and bass note ([60b88a1](https://github.com/omnibrain/svguitar-chords-plugin/commit/60b88a148738cffb923c99e957e286efefa540eb))
+
 ## [0.0.3](https://github.com/omnibrain/svguitar-chords-plugin/compare/chords-plugin-v0.0.2...chords-plugin-v0.0.3) (2026-10-09)
 
 
