@@ -1,6 +1,6 @@
 {
   "name": "@svguitar/chords-plugin",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "SVGuitar plugin to draw chord diagrams from chord names like \"C#\".",
   "keywords": [
     "guitar",
