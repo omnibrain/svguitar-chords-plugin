@@ -8,6 +8,7 @@ import {
 } from '../src/chord-name'
 import guitar from '../src/data/guitar.json'
 import ukulele from '../src/data/ukulele.json'
+import { decodeVoicing } from '../src/voicing'
 
 describe('chordFromName', () => {
   test('converts an open chord', () => {
@@ -38,72 +39,103 @@ describe('chordFromName', () => {
   })
 
   test('sets the position of chords higher up the neck', () => {
+    // x35553: the barre doesn't cover the low E string, it would put G in the bass
     expect(chordFromName('C', 1)).toEqual({
       fingers: [
+        [6, 'x'],
         [4, 3, '2'],
         [3, 3, '3'],
         [2, 3, '4'],
       ],
-      barres: [{ fromString: 6, toString: 1, fret: 1, text: '1' }],
+      barres: [{ fromString: 5, toString: 1, fret: 1, text: '1' }],
       title: 'C',
       position: 3,
     })
   })
 
   test('only draws the barre across the strings of the barre finger', () => {
-    // frets x22122, fingers 022134
-    const voicing = guitar.C['69'].split(' ').findIndex((v) => v.startsWith('x22122'))
+    // frets 211122, fingers 211134: three fingers on the 2nd fret but no barre there
+    const voicing = guitar.C['69'].split(' ').findIndex((v) => v.startsWith('211122211134'))
 
     expect(chordFromName('C6/9', voicing)).toEqual({
       fingers: [
-        [6, 'x'],
-        [3, 1, '1'],
+        [6, 2, '2'],
         [2, 2, '3'],
         [1, 2, '4'],
       ],
-      barres: [{ fromString: 5, toString: 4, fret: 2, text: '2' }],
+      barres: [{ fromString: 5, toString: 3, fret: 1, text: '1' }],
       title: 'C6/9',
-      position: 9,
+      position: 7,
     })
   })
 
   test.each([
-    ['C#', 'C#', 'major'],
-    ['Db', 'C#', 'major'],
-    ['C♯', 'C#', 'major'],
-    ['D♭', 'C#', 'major'],
-    ['A#m', 'Bb', 'minor'],
-    ['Ebm7', 'Eb', 'm7'],
-    ['Gbmaj7', 'F#', 'maj7'],
-    ['CM7', 'C', 'maj7'],
-    ['CMaj7', 'C', 'maj7'],
-    ['CΔ', 'C', 'maj7'],
-    ['Cmin', 'C', 'minor'],
-    ['C-7', 'C', 'm7'],
-    ['C°', 'C', 'dim'],
-    ['C°7', 'C', 'dim7'],
-    ['C+', 'C', 'aug'],
-    ['Cø', 'C', 'm7b5'],
-    ['CmM7', 'C', 'mmaj7'],
-    ['Csus', 'C', 'sus4'],
-    ['Cmaj', 'C', 'major'],
-    ['D/F#', 'D', '/F#'],
-    ['D/Gb', 'D', '/F#'],
-    ['Am/C', 'A', 'm/C'],
-    [' Am ', 'A', 'minor'],
-  ])('understands "%s"', (name, key, suffix) => {
-    const db: Record<string, Record<string, string>> = guitar
-
-    expect(chordVoicings(name)).toBe(db[key][suffix].split(' ').length)
-    expect(chordFromName(name)).toEqual({ ...chordFromName(`${key}${suffix}`), title: name })
+    ['C#', 'C#'],
+    ['Db', 'C#'],
+    ['C♯', 'C#'],
+    ['D♭', 'C#'],
+    ['A#m', 'Bbm'],
+    ['Ebm7', 'Ebm7'],
+    ['Gbmaj7', 'F#maj7'],
+    ['CM7', 'Cmaj7'],
+    ['CMaj7', 'Cmaj7'],
+    ['CΔ', 'Cmaj7'],
+    ['Cmin', 'Cm'],
+    ['C-7', 'Cm7'],
+    ['C°', 'Cdim'],
+    ['C°7', 'Cdim7'],
+    ['C+', 'Caug'],
+    ['Cø', 'Cm7b5'],
+    ['CmM7', 'Cmmaj7'],
+    ['Csus', 'Csus4'],
+    ['Cmaj', 'C'],
+    ['C6add9', 'C69'],
+    ['Cmaj7#11', 'Cmaj#11'],
+    ['D/F#', 'D/F#'],
+    ['D/Gb', 'D/F#'],
+    ['Am/C', 'Am/C'],
+    [' Am ', 'Am'],
+  ])('understands "%s"', (name, canonical) => {
+    expect(chordVoicings(name)).toBe(chordVoicings(canonical))
+    expect(chordFromName(name)).toEqual({ ...chordFromName(canonical), title: name })
   })
 
-  test.each(['H', 'Cxyz', 'C/C', 'C7/E', 'C/H', ''])('throws for unknown chord "%s"', (name) => {
+  test.each(['H', 'Cxyz', 'C/C', 'Cxyz/E', 'C/H', ''])('throws for unknown chord "%s"', (name) => {
     expect(() => chordFromName(name)).toThrow(`Unknown guitar chord "${name}"`)
   })
 
-  test.each([-1, 4, 1.5])('throws for a missing voicing %d', (voicing) => {
+  test.each([-1, 1.5, Infinity])('throws for a missing voicing %d', (voicing) => {
     expect(() => chordFromName('C', voicing)).toThrow('Chord "C" has no voicing')
+  })
+
+  test('throws for the voicing after the last', () => {
+    expect(() => chordFromName('C', chordVoicings('C'))).toThrow('Chord "C" has no voicing')
+  })
+
+  test('lists the voicings of the chord database first', () => {
+    const curated = guitar.C.major.split(' ')
+
+    expect(chordVoicings('C')).toBeGreaterThan(curated.length)
+    curated.forEach((voicing, i) =>
+      expect(chordFromName('C', i)).toEqual(decodeVoicing(voicing, 6, 'C')),
+    )
+  })
+
+  test('generates chords the database does not have', () => {
+    // C power chord at the 3rd fret: x355xx
+    expect(chordVoicings('C5')).toBeGreaterThan(1)
+    // x57566
+    expect(chordFromName('Bbmaj9/D')).toEqual({
+      fingers: [
+        [6, 'x'],
+        [4, 3, '4'],
+        [2, 2, '2'],
+        [1, 2, '3'],
+      ],
+      barres: [{ fromString: 5, toString: 3, fret: 1, text: '1' }],
+      title: 'Bbmaj9/D',
+      position: 5,
+    })
   })
 
   test('converts a ukulele chord', () => {
@@ -142,11 +174,15 @@ describe('chordFromName', () => {
   })
 
   test('finds ukulele chords stored under the other enharmonic name', () => {
-    expect(chordVoicings('C#m', 'ukulele')).toBe(ukulele.Db.minor.split(' ').length)
+    expect(chordVoicings('C#m', 'ukulele')).toBe(chordVoicings('Dbm', 'ukulele'))
+    expect(chordFromName('C#m', 0, 'ukulele')).toEqual(
+      decodeVoicing(ukulele.Db.minor.split(' ')[0], 4, 'C#m'),
+    )
   })
 
-  test('throws for chords the ukulele database does not have', () => {
-    expect(() => chordFromName('D/F#', 0, 'ukulele')).toThrow('Unknown ukulele chord "D/F#"')
+  test('throws for chords that cannot be played on the ukulele', () => {
+    expect(() => chordFromName('C6/Bb', 0, 'ukulele')).toThrow('Unknown ukulele chord "C6/Bb"')
+    expect(chordNames('ukulele')).not.toContain('C6/Bb')
   })
 
   test('has chords transposed from other roots', () => {
@@ -156,24 +192,20 @@ describe('chordFromName', () => {
     expect(chordVoicings('F#7sg')).toBeGreaterThan(0)
   })
 
-  test.each([
-    ['guitar', guitar, 709],
-    ['ukulele', ukulele, 552],
-  ] as const)('converts every %s chord in the database', (instrument, db, count) => {
-    const names = Object.entries(db).flatMap(([key, suffixes]) =>
-      Object.keys(suffixes).map((suffix) => key + suffix.replace(/^b13(.)9$/, '7$19b13')),
-    )
+  test.each(['guitar', 'ukulele'] as const)(
+    'converts every voicing of every %s chord',
+    (instrument) => {
+      chordNames(instrument).forEach((name) => {
+        for (let voicing = 0; voicing < chordVoicings(name, instrument); voicing += 1) {
+          const { fingers, barres } = chordFromName(name, voicing, instrument)
 
-    expect(names).toHaveLength(count)
-    names.forEach((name) => {
-      for (let voicing = 0; voicing < chordVoicings(name, instrument); voicing += 1) {
-        const { fingers, barres } = chordFromName(name, voicing, instrument)
-
-        expect(fingers.length + barres.length).toBeGreaterThan(0)
-        barres.forEach((barre) => expect(barre.fromString).toBeGreaterThan(barre.toString))
-      }
-    })
-  })
+          expect(fingers.length + barres.length).toBeGreaterThan(0)
+          barres.forEach((barre) => expect(barre.fromString).toBeGreaterThan(barre.toString))
+        }
+      })
+    },
+    120_000,
+  )
 })
 
 describe('getGuitarChord', () => {
@@ -192,21 +224,30 @@ describe('getUkuleleChord', () => {
 
 describe('chordNames', () => {
   test.each([
-    ['guitar', 709],
-    ['ukulele', 552],
-  ] as const)('returns every %s chord name, all of which can be looked up', (instrument, count) => {
-    const names = chordNames(instrument)
+    ['guitar', 9245],
+    ['ukulele', 7092],
+  ] as const)(
+    'returns every %s chord name, all of which can be looked up',
+    (instrument, count) => {
+      const names = chordNames(instrument)
 
-    expect(names).toHaveLength(count)
-    names.forEach((name) => expect(chordVoicings(name, instrument)).toBeGreaterThan(0))
-  })
+      expect(names).toHaveLength(count)
+      expect(new Set(names).size).toBe(count)
+      names.forEach((name) => expect(chordVoicings(name, instrument)).toBeGreaterThan(0))
+    },
+    60_000,
+  )
 
   test('lists major, minor, the other chords and then slash chords for each root', () => {
     const names = chordNames()
 
-    expect(names.slice(0, 5)).toEqual(['C', 'Cm', 'C6', 'C7', 'C9'])
-    expect(names.indexOf('C/E')).toBeGreaterThan(names.indexOf('Cmmaj11'))
-    expect(names.indexOf('C#')).toBeGreaterThan(names.indexOf('C/E'))
+    expect(names.slice(0, 5)).toEqual(['C', 'Cm', 'C5', 'C6', 'C7'])
+    expect(names.indexOf('C/E')).toBeGreaterThan(names.indexOf('Cmmaj13'))
+    expect(names.indexOf('C#')).toBeGreaterThan(names.indexOf('Cmmaj13/B'))
+  })
+
+  test('spells the bass of slash chords like the key', () => {
+    expect(chordNames()).toEqual(expect.arrayContaining(['E/D#', 'F/Eb', 'C/Eb', 'Bm7/A#']))
   })
 
   test('defaults to the guitar', () => {
@@ -216,14 +257,14 @@ describe('chordNames', () => {
 
 describe('searchChords', () => {
   test('returns the chords that start with the search', () => {
-    expect(searchChords('Am', 'guitar', 6)).toEqual(['Am', 'Am6', 'Am7', 'Am9', 'Am11', 'Am69'])
-    expect(searchChords('Am7')).toEqual(['Am7', 'Am7b5'])
+    expect(searchChords('Am', 'guitar', 4)).toEqual(['Am', 'Am6', 'Am7', 'Am9'])
+    expect(searchChords('Am7', 'guitar', 3)).toEqual(['Am7', 'Am7#5', 'Am7b5'])
   })
 
   test('puts the exact chord first, even if written differently', () => {
     expect(searchChords('CM7')).toEqual(['Cmaj7'])
     expect(searchChords('Cmaj', 'guitar', 3)).toEqual(['C', 'Cmaj7', 'Cmaj9'])
-    expect(searchChords('C6/9')).toEqual(['C69'])
+    expect(searchChords('C6/9', 'guitar', 1)).toEqual(['C69'])
   })
 
   test('spells the root like the search', () => {
@@ -243,6 +284,6 @@ describe('searchChords', () => {
 
 describe('chordVoicings', () => {
   test('returns the number of voicings', () => {
-    expect(chordVoicings('C')).toBe(4)
+    expect(chordVoicings('C')).toBe(15)
   })
 })

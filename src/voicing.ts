@@ -1,4 +1,30 @@
 import type { Barre, Chord, Finger } from '@svguitar/core'
+import { assignFingers, type Frets } from './voicing-generator'
+
+/** The frets of the diagram, which shows four frets */
+const diagramFrets = 4
+
+/**
+ * The frets of a compact voicing (see {@link decodeVoicing}) counted from the nut.
+ */
+export function decodeFrets(voicing: string, strings: number): Frets {
+  const baseFret = parseInt(voicing.slice(2 * strings), 36)
+
+  return [...voicing.slice(0, strings)].map((f) =>
+    f === 'x' ? -1 : f === '0' ? 0 : Number(f) + baseFret - 1,
+  )
+}
+
+/**
+ * The compact string of a voicing (see {@link decodeVoicing}), with its fingers.
+ */
+export function encodeVoicing(frets: Frets): string {
+  const fretted = frets.filter((f) => f > 0)
+  const baseFret = Math.max(...fretted, 0) <= diagramFrets ? 1 : Math.min(...fretted)
+  const relative = frets.map((f) => (f < 0 ? 'x' : f === 0 ? '0' : String(f - baseFret + 1)))
+
+  return relative.join('') + assignFingers(frets).join('') + baseFret.toString(36)
+}
 
 /**
  * Builds the SVGuitar chord for a voicing stored as a compact string, e.g. "x32010" + "032010" + "1"
