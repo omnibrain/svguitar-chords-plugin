@@ -47,7 +47,8 @@
     "test:watch": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage --watch",
     "test:prod": "run-s lint typecheck test",
     "prepare": "husky",
-    "generate:chords": "node scripts/generate-chords.mjs"
+    "generate:chords": "node scripts/generate-chords.mjs && node scripts/find-unavailable-chords.mts",
+    "train:voicings": "node scripts/train-voicing-weights.mts"
   },
   "peerDependencies": {
     "@svguitar/core": "^2.9.0"

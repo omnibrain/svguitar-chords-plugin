@@ -1,7 +1,11 @@
 import type { Chord } from '@svguitar/core'
+import { chordFormulas } from './chord-formulas'
 import guitar from './data/guitar.json'
 import ukulele from './data/ukulele.json'
-import { decodeVoicing } from './voicing'
+import unavailableChords from './data/unavailable-chords.json'
+import weights from './data/voicing-weights.json'
+import { decodeFrets, decodeVoicing, encodeVoicing } from './voicing'
+import { rankedVoicings, type Frets, type Instrument as Tuning } from './voicing-generator'
 
 export type Instrument = 'guitar' | 'ukulele'
 
@@ -9,6 +13,15 @@ export type Instrument = 'guitar' | 'ukulele'
 const databases: Record<Instrument, Record<string, Record<string, string>>> = { guitar, ukulele }
 
 const strings: Record<Instrument, number> = { guitar: 6, ukulele: 4 }
+
+const tunings: Record<Instrument, Tuning> = {
+  guitar: { tuning: [40, 45, 50, 55, 59, 64], rootInBass: true },
+  // the high G string means the lowest string isn't the lowest note, and ukulele chords rarely
+  // have the root in the bass
+  ukulele: { tuning: [67, 60, 64, 69], rootInBass: false, omitRootFrom: 4 },
+}
+
+const noteNames = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
 
 const pitchClasses: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
 
@@ -50,6 +63,14 @@ const qualityAliases: Record<string, string> = {
   'm(maj7)': 'mmaj7',
   mM9: 'mmaj9',
   mM11: 'mmaj11',
+  '6add9': '69',
+  m6add9: 'm69',
+  augmaj7: 'maj7#5',
+  '+maj7': 'maj7#5',
+  'maj7#11': 'maj#11',
+  'Δ#11': 'maj#11',
+  add2: 'add9',
+  madd2: 'madd9',
 }
 
 function pitchClass(note: string): number | undefined {
@@ -85,42 +106,120 @@ function parseName(name: string) {
   return /^([A-G][#b]?)([^/]*)(?:\/(.+))?$/.exec(normalized)
 }
 
-/**
- * Finds the database root and suffix of a chord name, e.g. "Db/F" -> "C#", "/F".
- */
-function findChord(name: string, instrument: Instrument) {
-  const db = databases[instrument]
-  const match = parseName(name)
-  const key = match && findEnharmonic(match[1], Object.keys(db))
+interface ChordId {
+  /** The root as spelled in the database, e.g. "C#" */
+  key: string
+  root: number
+  /** The chord type, e.g. "minor" or "maj7" */
+  quality: string
+  bass: number | null
+}
 
+/**
+ * The database suffix of a chord, e.g. "m/E" for an A minor chord over E, if the database has it.
+ */
+function curatedSuffix(
+  { key, quality, bass }: ChordId,
+  instrument: Instrument,
+): string | undefined {
+  const suffixes = databases[instrument][key]
+  if (bass === null) {
+    return quality in suffixes ? quality : undefined
+  }
+
+  // the database only has major and minor slash chords, stored as "/E" and "m/E"
+  const prefix = ({ major: '/', minor: 'm/' } as Record<string, string>)[quality]
+  const bassNote =
+    prefix &&
+    Object.keys(suffixes).find(
+      (s) => s.startsWith(prefix) && pitchClass(s.slice(prefix.length)) === bass,
+    )
+
+  return bassNote || undefined
+}
+
+/**
+ * Finds the chord a name stands for, e.g. "Db/F" -> C# major over F.
+ */
+function findChord(name: string, instrument: Instrument): ChordId | undefined {
+  const match = parseName(name)
+  const key = match && findEnharmonic(match[1], Object.keys(databases[instrument]))
   if (!match || !key) {
     return undefined
   }
 
-  const [, , quality, bass] = match
-  const suffixes = db[key]
-  let suffix = normalizeQuality(quality)
-
-  if (bass !== undefined) {
-    // the database only has major and minor slash chords, stored as "/E" and "m/E"
-    const prefix = { major: '/', minor: 'm/' }[suffix] ?? ''
-    const bassNotes = Object.keys(suffixes)
-      .filter((s) => prefix && s.startsWith(prefix))
-      .map((s) => s.slice(prefix.length))
-    const bassNote = findEnharmonic(bass, bassNotes)
-    suffix = bassNote ? `${prefix}${bassNote}` : ''
+  const root = pitchClass(key) as number
+  const bass = match[3] === undefined ? null : pitchClass(match[3])
+  if (bass === undefined || bass === root) {
+    return undefined
   }
 
-  return suffix in suffixes ? { key, suffix } : undefined
+  const chord = { key, root, quality: normalizeQuality(match[2]), bass }
+  const known = curatedSuffix(chord, instrument) !== undefined || chord.quality in chordFormulas
+
+  return known ? chord : undefined
+}
+
+// chord type (and semitones of the bass above the root) -> roots as a bit mask, see scripts/find-unavailable-chords.mts
+const unavailable: Record<Instrument, Record<string, string>> = unavailableChords
+
+function isUnavailable({ root, quality, bass }: ChordId, instrument: Instrument): boolean {
+  const kind = quality + (bass === null ? '' : `/${(bass - root + 12) % 12}`)
+  const roots = unavailable[instrument][kind]
+
+  return roots !== undefined && (parseInt(roots, 16) & (1 << root)) !== 0
+}
+
+// open voicings first, then from the nut up the neck
+const position = (frets: Frets) => (frets.includes(0) ? 0 : Math.min(...frets.filter((f) => f > 0)))
+
+const generated = new Map<string, string[]>()
+
+/**
+ * The voicings of a chord: those of the chord database first, then the generated ones.
+ */
+function voicingsOf(chord: ChordId, instrument: Instrument): string[] {
+  const id = `${instrument} ${chord.root} ${chord.quality} ${chord.bass}`
+  const cached = generated.get(id)
+  if (cached) {
+    return cached
+  }
+
+  const curated = curatedSuffix(chord, instrument)
+  const voicings = curated ? databases[instrument][chord.key][curated].split(' ') : []
+  const formula = chordFormulas[chord.quality]
+
+  if (formula) {
+    const n = strings[instrument]
+    const frets = (voicing: string) => decodeFrets(voicing, n).join()
+    const known = new Set(voicings.map(frets))
+    rankedVoicings(
+      { root: chord.root, bass: chord.bass, required: formula[0], optional: formula[1] },
+      tunings[instrument],
+      weights,
+    )
+      .sort((a, b) => position(a) - position(b))
+      .forEach((f: Frets) => {
+        const voicing = encodeVoicing(f)
+        if (!known.has(f.join())) {
+          known.add(f.join())
+          voicings.push(voicing)
+        }
+      })
+  }
+
+  generated.set(id, voicings)
+  return voicings
 }
 
 function findVoicings(name: string, instrument: Instrument): string[] {
   const chord = findChord(name, instrument)
-  if (!chord) {
+  const voicings = chord ? voicingsOf(chord, instrument) : []
+  if (voicings.length === 0) {
     throw new Error(`Unknown ${instrument} chord "${name}"`)
   }
 
-  return databases[instrument][chord.key][chord.suffix].split(' ')
+  return voicings
 }
 
 /**
@@ -131,33 +230,78 @@ function displaySuffix(suffix: string): string {
 }
 
 // major and minor first and slash chords last, otherwise the shortest names first
-function compareSuffixes(a: string, b: string): number {
-  const rank = (suffix: string) =>
-    suffix === 'major' ? 0 : suffix === 'minor' ? 1 : suffix.includes('/') ? 3 : 2
+function compareNames(a: string, b: string): number {
+  const rank = (name: string) => (name === '' ? 0 : name === 'm' ? 1 : name.includes('/') ? 3 : 2)
 
-  return (
-    rank(a) - rank(b) ||
-    displaySuffix(a).length - displaySuffix(b).length ||
-    displaySuffix(a).localeCompare(displaySuffix(b))
+  return rank(a) - rank(b) || a.length - b.length || a.localeCompare(b)
+}
+
+const flatKeys = ['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb']
+const sharpKeys = ['G', 'D', 'A', 'E', 'B', 'F#', 'C#']
+
+/** How the bass note of a slash chord is spelled for a root */
+function bassName(bass: number, key: string): string {
+  const name = noteNames[bass]
+  const flat = name.endsWith('b')
+  if (flat && sharpKeys.includes(key)) return noteNames[bass - 1] + '#'
+  if (!flat && name.endsWith('#') && flatKeys.includes(key)) return noteNames[(bass + 1) % 12] + 'b'
+  return name
+}
+
+const suffixLists = new Map<string, { suffix: string; chord: ChordId }[]>()
+
+/**
+ * Every chord of a root, written as the part of the name after the root (e.g. "m7" or "/E"),
+ * sorted like {@link compareNames}.
+ */
+function chordsOfRoot(key: string, instrument: Instrument) {
+  const id = `${instrument} ${key}`
+  const cached = suffixLists.get(id)
+  if (cached) {
+    return cached
+  }
+
+  const root = pitchClass(key) as number
+  const qualities = new Set([
+    ...Object.keys(databases[instrument][key]).filter((s) => !s.includes('/')),
+    ...Object.keys(chordFormulas),
+  ])
+  const chords: ChordId[] = [...qualities].map((quality) => ({ key, root, quality, bass: null }))
+  // slash chords for every bass note: those the database has and those the generator can make
+  ;[...qualities].forEach((quality) =>
+    noteNames.forEach((_, bass) => {
+      if (bass === root) return
+      const chord = { key, root, quality, bass }
+      if (quality in chordFormulas || curatedSuffix(chord, instrument)) chords.push(chord)
+    }),
   )
+
+  const list = chords
+    .filter((chord) => curatedSuffix(chord, instrument) || !isUnavailable(chord, instrument))
+    .map((chord) => ({ suffix: displayName(chord).slice(key.length), chord }))
+    .sort((a, b) => compareNames(a.suffix, b.suffix))
+  suffixLists.set(id, list)
+  return list
+}
+
+function displayName({ key, quality, bass }: ChordId): string {
+  return key + displaySuffix(quality) + (bass === null ? '' : '/' + bassName(bass, key))
 }
 
 /**
  * Returns the names of all chords of an instrument, e.g. "C", "Cm", "C6", ..., "Bm/F#".
  */
 export function chordNames(instrument: Instrument = 'guitar'): string[] {
-  return Object.entries(databases[instrument]).flatMap(([key, suffixes]) =>
-    Object.keys(suffixes)
-      .sort(compareSuffixes)
-      .map((suffix) => key + displaySuffix(suffix)),
+  return Object.keys(databases[instrument]).flatMap((key) =>
+    chordsOfRoot(key, instrument).map(({ suffix }) => key + suffix),
   )
 }
 
 /**
  * Returns the names of the chords that match a search, for chord suggestions while typing. A chord
  * the search names exactly (e.g. "CM7") comes first, followed by the chords that start with the
- * search (e.g. "Cm" -> "Cm", "Cm6", "Cm7", ..., "Cmaj7"), shortest first. The root is spelled like
- * in the search and may be lowercase ("db" -> "Db...").
+ * search (e.g. "Cm" -> "Cm", "Cm6", "Cm7", ..., "Cmaj7"), shortest first and slash chords last. The
+ * root is spelled like in the search and may be lowercase ("db" -> "Db...").
  *
  * @param query What the user typed
  * @param instrument The instrument to search the chords of
@@ -181,13 +325,14 @@ export function searchChords(
 
   const typed = search.slice(root.length)
   const exact = findChord(search, instrument)
-  const suffixes = Object.keys(databases[instrument][key])
-    .filter((suffix) => suffix !== exact?.suffix && displaySuffix(suffix).startsWith(typed))
-    .sort(compareSuffixes)
+  const exactSuffix = exact && displayName(exact).slice(key.length)
+  const suffixes = chordsOfRoot(key, instrument)
+    .map(({ suffix }) => suffix)
+    .filter((suffix) => suffix !== exactSuffix && suffix.startsWith(typed))
 
-  return [...(exact ? [exact.suffix] : []), ...suffixes]
+  return [...(exactSuffix !== undefined ? [exactSuffix] : []), ...suffixes]
     .slice(0, limit)
-    .map((suffix) => root + displaySuffix(suffix))
+    .map((suffix) => root + suffix)
 }
 
 /**
